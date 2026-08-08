@@ -49,8 +49,10 @@ location. Copy the resulting DLL into `BepInEx/plugins/`.
 
 ## Status
 
-Early. See [CLAUDE.md](CLAUDE.md) for the recovered game API reference and the
-list of things still unverified.
+**v0.2.0 — tested and working in singleplayer** (game build `211b5aad0ca1`).
+All damage implementors patch on load, RCS clamps on mission entry, and the
+F10 toggle with on-screen indicator works in-flight. See
+[CLAUDE.md](CLAUDE.md) for the verified game API reference.
 
 ## Credits
 

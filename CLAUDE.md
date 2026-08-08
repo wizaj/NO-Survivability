@@ -6,12 +6,20 @@ immunity.
 
 ## Status
 
-`v0.2.0`. **Compiles clean against the shipping assembly (2026-08-08); not
-yet run in game.** The code was originally written against game API signatures
-recovered by reading other open-source mods. First build resolved every
-recovered signature — the only fix needed was referencing `Mirage.dll`
-(the game's networking library): `Unit` derives from Mirage's
-`NetworkBehaviour`, which is where `IsServer` is declared.
+`v0.2.0`. **Tested and working in singleplayer** (2026-08-08, game build
+`211b5aad0ca1`). First in-game run confirmed everything on the first try:
+
+- 10 `TakeDamage` implementors discovered and patched: `SoftBodyRotor`,
+  `SwashRotor`, `Turbofan`, `MapBuilding`, `UnitPart`, `Pilot`,
+  `PilotDismounted`, `Missile`, `MountedCargo`, `SubmunitionDispenser`.
+  (More than the recovered docs knew about — the reflective discovery
+  approach paid off.)
+- Player aircraft acquired; stock RCS `0.14`, clamped to floor.
+- F10 toggle cycles cleanly; on-screen toast displays.
+
+The only build fix ever needed was referencing `Mirage.dll` (the game's
+networking library): `Unit` derives from Mirage's `NetworkBehaviour`, which
+is where `IsServer` is declared.
 
 ## Build
 
@@ -122,8 +130,9 @@ Also useful: `aircraft.GetAircraftParameters().aircraftName`,
 
 1. ~~`PersistentID` namespace.~~ **Resolved:** it lives in the global
    namespace; compiles bare with no extra `using`.
-2. Whether `RCS` is a field or property. `RcsDriver` tries both via Traverse
-   and logs which it resolved. Still unverified until first run.
+2. ~~Whether `RCS` is a field or property.~~ **Resolved:** public float
+   *field* on `Unit` (confirmed via Mono.Cecil against the shipping
+   assembly). The Traverse field path is the one in use.
 3. ~~Where `IsServer` is declared.~~ **Resolved:** on Mirage's
    `NetworkBehaviour`, which `Unit` derives from — hence the `Mirage.dll`
    reference in the csproj.
