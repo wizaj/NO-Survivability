@@ -11,8 +11,10 @@ that makes the local player's aircraft survivable in singleplayer.
 - **Damage immunity** — blocks all damage applied to parts of the player
   aircraft: pierce, blast, fire, impact and collision.
 
-Both are independently toggleable in config, and `F10` toggles everything at
-runtime.
+Both are independently toggleable in config, and a rebindable key (`F10` by
+default) toggles everything at runtime, with a brief on-screen indicator.
+The toggle is routed through the game's pilot input handler, so it only
+registers while you're flying — never while typing in chat or in menus.
 
 ## Scope
 
@@ -32,7 +34,7 @@ Written to `BepInEx/config/local.nosolosurvivability.cfg` on first run.
 | RCS | `Floor` | `0.0001` | Not exactly zero — avoids NaN in ratio comparisons |
 | Damage | `Enabled` | `true` | |
 | Safety | `RequireServerAuthority` | `true` | Leave on |
-| Keybinds | `Toggle` | `F10` | |
+| Keybinds | `Toggle` | `F10` | Any [`KeyCode`](https://docs.unity3d.com/ScriptReference/KeyCode.html) name; `None` disables. Rebind in the cfg or via ConfigurationManager |
 | UI | `ToastSeconds` | `2.5` | On-screen ENABLED/DISABLED indicator duration; `0` hides it |
 
 ## Building

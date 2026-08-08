@@ -6,7 +6,11 @@ immunity.
 
 ## Status
 
-`v0.2.0`. **Tested and working in singleplayer** (2026-08-08, game build
+`v0.3.0` — adds a rebindable toggle key (`ConfigEntry<KeyCode>`, hooked into
+`PilotPlayerState.PlayerControls` the way DefensiveAutoTarget does, with
+always-on polling as fallback if the hook fails). Built, not yet tested.
+
+`v0.2.0`: **tested and working in singleplayer** (2026-08-08, game build
 `211b5aad0ca1`). First in-game run confirmed everything on the first try:
 
 - 10 `TakeDamage` implementors discovered and patched: `SoftBodyRotor`,
@@ -122,6 +126,14 @@ SceneSingleton<CombatHUD>.i.aircraft
 
 This is the local player's own aircraft — keying off it scopes effects to the
 player rather than all aircraft. Pattern taken from `NO_Tactitools`.
+
+### Pilot input
+
+`PilotPlayerState.PlayerControls` runs the local player's in-cockpit input
+handling. Postfixing it and checking `Input.GetKeyDown` there (pattern from
+`Modzer0/DefensiveAutoTarget`) scopes a keybind to "actually flying" — it
+won't fire while typing in chat or in menus. Confirmed present in the
+shipping assembly (DefensiveAutoTarget patches it and works).
 Also useful: `aircraft.GetAircraftParameters().aircraftName`,
 `aircraft.definition.unitName`, `aircraft.definition.jsonKey`,
 `aircraft.radar.activated`, `aircraft.NetworkHQ`, `aircraft.rb`.

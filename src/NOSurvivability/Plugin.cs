@@ -15,7 +15,7 @@ namespace NOSoloSurvivability
     {
         public const string PluginGuid = "local.nosolosurvivability";
         public const string PluginName = "Solo Survivability";
-        public const string PluginVersion = "0.2.0";
+        public const string PluginVersion = "0.3.0";
 
         internal static ManualLogSource Log;
 
@@ -23,10 +23,11 @@ namespace NOSoloSurvivability
         internal static ConfigEntry<float> RcsFloor;
         internal static ConfigEntry<bool> DamageImmunity;
         internal static ConfigEntry<bool> RequireServerAuthority;
-        internal static ConfigEntry<KeyboardShortcut> ToggleKey;
+        internal static ConfigEntry<KeyCode> ToggleKey;
         internal static ConfigEntry<float> ToastSeconds;
 
         internal static bool RuntimeEnabled = true;
+        internal static bool KeybindPatched;
 
         private void Awake()
         {
@@ -50,8 +51,10 @@ namespace NOSoloSurvivability
                 "On a dedicated server this makes the mod inert, because damage is " +
                 "resolved server-side and the block would not apply anyway.");
 
-            ToggleKey = Config.Bind("Keybinds", "Toggle", new KeyboardShortcut(KeyCode.F10),
-                "Toggles all effects on/off at runtime.");
+            ToggleKey = Config.Bind("Keybinds", "Toggle", KeyCode.F10,
+                "Key that toggles all effects at runtime. Accepts any UnityEngine.KeyCode " +
+                "name; rebind here or via ConfigurationManager. None disables the keybind. " +
+                "Only registers while flying (hooked into the game's pilot input handler).");
 
             ToastSeconds = Config.Bind("UI", "ToastSeconds", 2.5f,
                 new ConfigDescription(
@@ -61,6 +64,7 @@ namespace NOSoloSurvivability
 
             var harmony = new Harmony(PluginGuid);
             DamagePatcher.ApplyAll(harmony);
+            KeybindPatcher.Apply(harmony);
 
             var host = new GameObject("NOSoloSurvivability_Host");
             host.hideFlags = HideFlags.HideAndDontSave;
@@ -68,6 +72,48 @@ namespace NOSoloSurvivability
             host.AddComponent<RcsDriver>();
 
             Log.LogInfo($"{PluginName} {PluginVersion} loaded. Toggle: {ToggleKey.Value}");
+        }
+
+        internal static void ToggleRuntime()
+        {
+            RuntimeEnabled = !RuntimeEnabled;
+            Log.LogInfo($"{PluginName} {(RuntimeEnabled ? "ENABLED" : "DISABLED")}");
+            RcsDriver.Instance?.OnToggled();
+        }
+    }
+
+    /// <summary>
+    /// Routes the toggle key through the game's own pilot input handler
+    /// (pattern from Modzer0/DefensiveAutoTarget): the key only registers
+    /// while the player is actually flying, so it cannot fire while typing
+    /// in chat or navigating menus. If the hook can't be resolved,
+    /// RcsDriver.Update falls back to always-on polling.
+    /// </summary>
+    internal static class KeybindPatcher
+    {
+        public static void Apply(Harmony harmony)
+        {
+            Type owner = AccessTools.TypeByName("PilotPlayerState");
+            MethodInfo target = owner == null ? null : AccessTools.Method(owner, "PlayerControls");
+            if (target == null)
+            {
+                Plugin.Log.LogWarning(
+                    "PilotPlayerState.PlayerControls not found; toggle key falls back " +
+                    "to always-on polling (will also fire outside the cockpit).");
+                return;
+            }
+
+            harmony.Patch(target, postfix: new HarmonyMethod(
+                AccessTools.Method(typeof(KeybindPatcher), nameof(PlayerControlsPostfix))));
+            Plugin.KeybindPatched = true;
+            Plugin.Log.LogInfo("Toggle key hooked into PilotPlayerState.PlayerControls.");
+        }
+
+        private static void PlayerControlsPostfix()
+        {
+            KeyCode key = Plugin.ToggleKey.Value;
+            if (key == KeyCode.None || !Input.GetKeyDown(key)) return;
+            Plugin.ToggleRuntime();
         }
     }
 
@@ -221,6 +267,8 @@ namespace NOSoloSurvivability
     /// </summary>
     internal class RcsDriver : MonoBehaviour
     {
+        internal static RcsDriver Instance;
+
         private Aircraft cached;
         private Traverse accessor;
         private float original = -1f;
@@ -230,12 +278,20 @@ namespace NOSoloSurvivability
         private float toastUntil;
         private GUIStyle toastStyle;
 
+        private void Awake() => Instance = this;
+
+        /// <summary>Fallback path only: KeybindPatcher normally owns the key.</summary>
         private void Update()
         {
-            if (!Plugin.ToggleKey.Value.IsDown()) return;
+            if (Plugin.KeybindPatched) return;
 
-            Plugin.RuntimeEnabled = !Plugin.RuntimeEnabled;
-            Plugin.Log.LogInfo($"Solo Survivability {(Plugin.RuntimeEnabled ? "ENABLED" : "DISABLED")}");
+            KeyCode key = Plugin.ToggleKey.Value;
+            if (key == KeyCode.None || !Input.GetKeyDown(key)) return;
+            Plugin.ToggleRuntime();
+        }
+
+        public void OnToggled()
+        {
             ShowToast();
             if (!Plugin.RuntimeEnabled) Restore();
         }
@@ -322,6 +378,10 @@ namespace NOSoloSurvivability
             if (accessor != null && original >= 0f) accessor.SetValue(original);
         }
 
-        private void OnDestroy() => Restore();
+        private void OnDestroy()
+        {
+            Restore();
+            if (Instance == this) Instance = null;
+        }
     }
 }
