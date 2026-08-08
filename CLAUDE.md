@@ -6,9 +6,20 @@ immunity.
 
 ## Status
 
-`v0.3.0` — adds a rebindable toggle key (`ConfigEntry<KeyCode>`, hooked into
+`v0.4.0` — closes the damage leaks found in v0.3.0 field testing. Blocks the
+full `IDamageable` damage surface (`TakeDamage`, `ApplyDamage`,
+`TakeShockwave`) plus the two paths that bypass it: `AeroPart.CheckAttachment`
+(physics structural tearing) and `Turbofan.InvokeDamage` (engine
+self-damage). Owner resolution now uses `IDamageable.GetUnit()` instead of
+reflective field guessing. Built and installed, not yet tested.
+
+`v0.3.0` — rebindable toggle key (`ConfigEntry<KeyCode>`, hooked into
 `PilotPlayerState.PlayerControls` the way DefensiveAutoTarget does, with
-always-on polling as fallback if the hook fails). Built, not yet tested.
+always-on polling as fallback if the hook fails). **Tested**: hook engages
+and toggle works in-flight — but sustained missile hits eventually killed
+the aircraft anyway, which is what exposed the leaks fixed in v0.4.0
+(tail booms physically torn off; `metal_tear1` audio in the log while
+TakeDamage was blocked).
 
 `v0.2.0`: **tested and working in singleplayer** (2026-08-08, game build
 `211b5aad0ca1`). First in-game run confirmed everything on the first try:
@@ -67,6 +78,40 @@ The game's own type switch tests `Turbofan` **before** `UnitPart`, implying
 `Turbofan` overrides rather than inherits — so patching the base method alone
 is not sufficient. `DamagePatcher` discovers implementors reflectively for
 this reason.
+
+**`TakeDamage` is not the whole story.** The full interface, dumped from the
+shipping assembly with Mono.Cecil:
+
+```csharp
+interface IDamageable
+{
+    void TakeDamage(float pierce, float blast, float amountAffected,
+                    float fire, float impact, PersistentID dealerID);
+    void ApplyDamage(float pierce, float blast, float fire, float impact);
+    void TakeShockwave(Vector3 origin, float overpressure, float blastPower);
+    void Detach(Vector3 velocity, Vector3 relativePos);
+    ArmorProperties GetArmorProperties();
+    Unit GetUnit();          // canonical owner accessor — use this, not field reflection
+    float GetMass();
+    Transform GetTransform();
+}
+```
+
+Damage paths confirmed by IL scan (all `stfld hitPoints` writers and
+`DetachPart`/`ReportKilled` callers):
+
+1. `TakeDamage` — server-side armour resolution. Blocked since v0.2.0.
+2. `Unit.RpcDamage(byte index, DamageInfo)` → `IDamageable.ApplyDamage` —
+   Mirage RPC receiver writing `hitPoints` directly. Leaked until v0.4.0.
+3. `TakeShockwave` — blast overpressure from near misses. Leaked until v0.4.0.
+4. `PartChecker.Check` → `AeroPart.CheckAttachment()` → `Unit.DetachPart` —
+   pure physics: excess force tears parts off with **no damage call at all**.
+   This was the observed v0.3.0 death (tail booms torn by blast impulse).
+5. `Turbofan.FixedUpdate` → `Turbofan.InvokeDamage()` (no-arg overload) —
+   engine self-damage (debris/FOD ingestion).
+
+`UnitPart.InvokeDamage(float×4)` is only reached via `ApplyDamage`
+implementations, so blocking the `ApplyDamage` layer covers it.
 
 Damage resolution inside `UnitPart.TakeDamage`:
 
@@ -155,8 +200,12 @@ Also useful: `aircraft.GetAircraftParameters().aircraftName`,
 
 Watch `BepInEx/LogOutput.log` on load for:
 
-- One `Patched <type>.TakeDamage` line per implementor. Zero lines means the
-  signature is wrong and immunity is silently inert.
+- One `Patched <type>: <methods>` line per implementor (e.g.
+  `Patched UnitPart: TakeDamage, ApplyDamage, TakeShockwave`). Zero lines
+  means the signatures are wrong and immunity is silently inert.
+- `Patched AeroPart.CheckAttachment (physics structural tearing)` and
+  `Patched Turbofan.InvokeDamage (engine self-damage)` — the two
+  non-IDamageable guards.
 - `Player aircraft acquired. Stock RCS = ...` on mission entry. Record the
   stock value per airframe; useful for tuning the floor.
 

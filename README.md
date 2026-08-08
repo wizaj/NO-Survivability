@@ -9,7 +9,8 @@ that makes the local player's aircraft survivable in singleplayer.
   negligible value, so radar-guided seekers and ground radar cannot generate a
   usable return.
 - **Damage immunity** — blocks all damage applied to parts of the player
-  aircraft: pierce, blast, fire, impact and collision.
+  aircraft: pierce, blast, fire, impact and collision, plus blast shockwaves,
+  physics-driven structural tearing, and engine debris ingestion.
 
 Both are independently toggleable in config, and a rebindable key (`F10` by
 default) toggles everything at runtime, with a brief on-screen indicator.
@@ -51,10 +52,12 @@ location. Copy the resulting DLL into `BepInEx/plugins/`.
 
 ## Status
 
-**v0.2.0 — tested and working in singleplayer** (game build `211b5aad0ca1`).
-All damage implementors patch on load, RCS clamps on mission entry, and the
-F10 toggle with on-screen indicator works in-flight. See
-[CLAUDE.md](CLAUDE.md) for the verified game API reference.
+**v0.4.0** — in testing. Field testing of earlier versions showed damage
+leaking through paths beyond `TakeDamage`; v0.4.0 blocks the full damage
+surface: direct/RPC damage, blast shockwaves, physics structural tearing,
+and engine debris self-damage. RCS clamp, rebindable toggle, and on-screen
+indicator are confirmed working in singleplayer (game build `211b5aad0ca1`).
+See [CLAUDE.md](CLAUDE.md) for the verified game API reference.
 
 ## Credits
 

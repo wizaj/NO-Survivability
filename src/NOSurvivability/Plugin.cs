@@ -15,7 +15,7 @@ namespace NOSoloSurvivability
     {
         public const string PluginGuid = "local.nosolosurvivability";
         public const string PluginName = "Solo Survivability";
-        public const string PluginVersion = "0.3.0";
+        public const string PluginVersion = "0.4.0";
 
         internal static ManualLogSource Log;
 
@@ -139,24 +139,27 @@ namespace NOSoloSurvivability
     }
 
     /// <summary>
-    /// Patches every concrete implementation of IDamageable.TakeDamage.
+    /// Patches every concrete implementation of the IDamageable damage surface:
+    /// TakeDamage (server-side armour resolution), ApplyDamage (direct hitPoints
+    /// write, reached via Unit.RpcDamage) and TakeShockwave (blast overpressure
+    /// from near misses). Patching only TakeDamage is not enough — v0.3.0 field
+    /// testing showed damage leaking through the other two, plus two paths that
+    /// bypass IDamageable entirely (physics tearing and engine self-damage),
+    /// which get targeted patches below.
     ///
-    /// Harmony does not intercept overrides when you patch a base method, and
-    /// Turbofan is matched before UnitPart in the game's own type switch, which
-    /// implies it overrides rather than inherits. Rather than hardcoding a list
-    /// that breaks on the next game update, this discovers implementors at load
-    /// time and patches each one it finds.
+    /// Harmony does not intercept overrides when you patch a base method, so
+    /// this discovers implementors at load time and patches whatever each type
+    /// declares itself.
     /// </summary>
     internal static class DamagePatcher
     {
-        private static readonly Type[] TakeDamageSignature =
+        private static readonly string[] BlockedNames = { "TakeDamage", "ApplyDamage", "TakeShockwave" };
+
+        private static readonly Type[][] BlockedSignatures =
         {
-            typeof(float),          // pierceDamage
-            typeof(float),          // blastDamage
-            typeof(float),          // amountAffected
-            typeof(float),          // fireDamage
-            typeof(float),          // impactDamage
-            typeof(PersistentID)    // dealerID
+            new[] { typeof(float), typeof(float), typeof(float), typeof(float), typeof(float), typeof(PersistentID) },
+            new[] { typeof(float), typeof(float), typeof(float), typeof(float) },
+            new[] { typeof(Vector3), typeof(float), typeof(float) },
         };
 
         public static void ApplyAll(Harmony harmony)
@@ -167,29 +170,66 @@ namespace NOSoloSurvivability
             int patched = 0;
             foreach (Type t in FindDamageableTypes())
             {
-                MethodInfo m = AccessTools.Method(t, "TakeDamage", TakeDamageSignature);
-                if (m == null || m.IsAbstract) continue;
-
-                // Skip inherited methods: patching the declaring type once is enough,
-                // and patching the same MethodInfo twice throws.
-                if (m.DeclaringType != t) continue;
-
-                try
+                var done = new List<string>();
+                for (int i = 0; i < BlockedNames.Length; i++)
                 {
-                    harmony.Patch(m, prefix: prefix);
-                    patched++;
-                    Plugin.Log.LogInfo($"Patched {t.FullName}.TakeDamage");
+                    MethodInfo m = AccessTools.Method(t, BlockedNames[i], BlockedSignatures[i]);
+                    if (m == null || m.IsAbstract) continue;
+
+                    // Skip inherited methods: patching the declaring type once is
+                    // enough, and patching the same MethodInfo twice throws.
+                    if (m.DeclaringType != t) continue;
+
+                    try
+                    {
+                        harmony.Patch(m, prefix: prefix);
+                        done.Add(BlockedNames[i]);
+                    }
+                    catch (Exception e)
+                    {
+                        Plugin.Log.LogWarning($"Could not patch {t.FullName}.{BlockedNames[i]}: {e.Message}");
+                    }
                 }
-                catch (Exception e)
+
+                if (done.Count > 0)
                 {
-                    Plugin.Log.LogWarning($"Could not patch {t.FullName}.TakeDamage: {e.Message}");
+                    patched++;
+                    Plugin.Log.LogInfo($"Patched {t.FullName}: {string.Join(", ", done.ToArray())}");
                 }
             }
 
             if (patched == 0)
                 Plugin.Log.LogError(
-                    "No TakeDamage implementations patched. The signature has likely " +
+                    "No damage implementations patched. The signatures have likely " +
                     "changed. Damage immunity will not work.");
+
+            // Damage that never crosses the IDamageable surface:
+            // parts physically torn off by excess force (the tailboom failure
+            // mode observed in v0.3.0 testing), and turbofans grinding
+            // themselves down in FixedUpdate after ingesting debris.
+            PatchGuard(harmony, prefix, "AeroPart", "CheckAttachment", "physics structural tearing");
+            PatchGuard(harmony, prefix, "Turbofan", "InvokeDamage", "engine self-damage");
+        }
+
+        private static void PatchGuard(Harmony harmony, HarmonyMethod prefix, string typeName, string methodName, string what)
+        {
+            Type t = AccessTools.TypeByName(typeName);
+            MethodInfo m = t == null ? null : AccessTools.Method(t, methodName, Type.EmptyTypes);
+            if (m == null)
+            {
+                Plugin.Log.LogWarning($"{typeName}.{methodName} not found — {what} will NOT be blocked.");
+                return;
+            }
+
+            try
+            {
+                harmony.Patch(m, prefix: prefix);
+                Plugin.Log.LogInfo($"Patched {typeName}.{methodName} ({what})");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Could not patch {typeName}.{methodName}: {e.Message}");
+            }
         }
 
         private static IEnumerable<Type> FindDamageableTypes()
@@ -228,29 +268,24 @@ namespace NOSoloSurvivability
             return false;
         }
 
-        private static readonly Dictionary<Type, FieldInfo> ParentCache = new Dictionary<Type, FieldInfo>();
-
         /// <summary>
-        /// UnitPart exposes parentUnit. Other implementors may name it
-        /// differently, so fall back to a cached reflective search for any
-        /// Unit-typed member, then to a component lookup.
+        /// IDamageable ships its own owner accessor, GetUnit() — discovered via
+        /// Cecil after v0.3.0's reflective field search misattributed types
+        /// whose owner reference lives on a base class (e.g. MountedCargo's
+        /// attachedUnit is declared on Weapon). Fallbacks cover the two guard
+        /// patches on types reached before full interface dispatch is safe.
         /// </summary>
         private static Unit ResolveOwner(object instance)
         {
             if (instance == null) return null;
-            if (instance is Unit direct) return direct;
 
-            Type t = instance.GetType();
-            if (!ParentCache.TryGetValue(t, out FieldInfo field))
+            if (instance is IDamageable d)
             {
-                field = AccessTools.Field(t, "parentUnit")
-                        ?? AccessTools.GetDeclaredFields(t)
-                            .FirstOrDefault(f => typeof(Unit).IsAssignableFrom(f.FieldType));
-                ParentCache[t] = field;
+                try { return d.GetUnit(); }
+                catch (NullReferenceException) { return null; }
             }
 
-            if (field != null)
-                return field.GetValue(instance) as Unit;
+            if (instance is Unit direct) return direct;
 
             if (instance is Component c)
                 return c.GetComponentInParent<Unit>();
