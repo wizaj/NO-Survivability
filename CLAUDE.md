@@ -6,10 +6,12 @@ immunity.
 
 ## Status
 
-`v0.2.0`. **Never compiled and never run.** The code is written against game
-API signatures recovered by reading other open-source mods, not against a
-decompiled `Assembly-CSharp.dll`. First build will likely surface one or two
-type-resolution errors — see "Known unknowns" below.
+`v0.2.0`. **Compiles clean against the shipping assembly (2026-08-08); not
+yet run in game.** The code was originally written against game API signatures
+recovered by reading other open-source mods. First build resolved every
+recovered signature — the only fix needed was referencing `Mirage.dll`
+(the game's networking library): `Unit` derives from Mirage's
+`NetworkBehaviour`, which is where `IsServer` is declared.
 
 ## Build
 
@@ -118,14 +120,15 @@ Also useful: `aircraft.GetAircraftParameters().aircraftName`,
 
 ## Known unknowns
 
-1. `PersistentID` namespace. Referenced bare in the signature array; may need
-   `using NuclearOption.SavedMission;`. Most likely first build error.
+1. ~~`PersistentID` namespace.~~ **Resolved:** it lives in the global
+   namespace; compiles bare with no extra `using`.
 2. Whether `RCS` is a field or property. `RcsDriver` tries both via Traverse
-   and logs which it resolved.
-3. Whether `Unit.IsServer` is declared on `Unit` or a networking base class.
-   Irrelevant to compilation, noted for searching.
-4. Game version targeting. Reference mods span 0.32–0.33.4. Verify against
-   whatever is installed.
+   and logs which it resolved. Still unverified until first run.
+3. ~~Where `IsServer` is declared.~~ **Resolved:** on Mirage's
+   `NetworkBehaviour`, which `Unit` derives from — hence the `Mirage.dll`
+   reference in the csproj.
+4. Game version targeting. Reference mods span 0.32–0.33.4. Local install
+   build hash at first successful compile: `211b5aad0ca1`.
 
 ## Verification once it builds
 
