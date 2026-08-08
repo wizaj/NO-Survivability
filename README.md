@@ -33,6 +33,7 @@ Written to `BepInEx/config/local.nosolosurvivability.cfg` on first run.
 | Damage | `Enabled` | `true` | |
 | Safety | `RequireServerAuthority` | `true` | Leave on |
 | Keybinds | `Toggle` | `F10` | |
+| UI | `ToastSeconds` | `2.5` | On-screen ENABLED/DISABLED indicator duration; `0` hides it |
 
 ## Building
 

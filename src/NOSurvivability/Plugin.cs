@@ -24,6 +24,7 @@ namespace NOSoloSurvivability
         internal static ConfigEntry<bool> DamageImmunity;
         internal static ConfigEntry<bool> RequireServerAuthority;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey;
+        internal static ConfigEntry<float> ToastSeconds;
 
         internal static bool RuntimeEnabled = true;
 
@@ -51,6 +52,12 @@ namespace NOSoloSurvivability
 
             ToggleKey = Config.Bind("Keybinds", "Toggle", new KeyboardShortcut(KeyCode.F10),
                 "Toggles all effects on/off at runtime.");
+
+            ToastSeconds = Config.Bind("UI", "ToastSeconds", 2.5f,
+                new ConfigDescription(
+                    "How long the on-screen ENABLED/DISABLED indicator stays visible " +
+                    "after toggling or entering an aircraft. 0 disables the indicator.",
+                    new AcceptableValueRange<float>(0f, 10f)));
 
             var harmony = new Harmony(PluginGuid);
             DamagePatcher.ApplyAll(harmony);
@@ -219,13 +226,51 @@ namespace NOSoloSurvivability
         private float original = -1f;
         private bool warned;
 
+        private string toastText;
+        private float toastUntil;
+        private GUIStyle toastStyle;
+
         private void Update()
         {
             if (!Plugin.ToggleKey.Value.IsDown()) return;
 
             Plugin.RuntimeEnabled = !Plugin.RuntimeEnabled;
             Plugin.Log.LogInfo($"Solo Survivability {(Plugin.RuntimeEnabled ? "ENABLED" : "DISABLED")}");
+            ShowToast();
             if (!Plugin.RuntimeEnabled) Restore();
+        }
+
+        private void ShowToast()
+        {
+            toastText = $"Solo Survivability: {(Plugin.RuntimeEnabled ? "ENABLED" : "DISABLED")}";
+            toastUntil = Time.unscaledTime + Plugin.ToastSeconds.Value;
+        }
+
+        private void OnGUI()
+        {
+            float remaining = toastUntil - Time.unscaledTime;
+            if (remaining <= 0f || toastText == null) return;
+
+            if (toastStyle == null)
+            {
+                toastStyle = new GUIStyle
+                {
+                    fontSize = 20,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                };
+            }
+
+            float alpha = Mathf.Clamp01(remaining / 0.5f); // fade over the last half second
+            var rect = new Rect(0, Screen.height * 0.12f, Screen.width, 30f);
+            Color body = Plugin.RuntimeEnabled
+                ? new Color(0.4f, 1f, 0.4f, alpha)
+                : new Color(1f, 0.55f, 0.2f, alpha);
+
+            toastStyle.normal.textColor = new Color(0f, 0f, 0f, alpha);
+            GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), toastText, toastStyle);
+            toastStyle.normal.textColor = body;
+            GUI.Label(rect, toastText, toastStyle);
         }
 
         private void LateUpdate()
@@ -262,6 +307,7 @@ namespace NOSoloSurvivability
                 original = accessor.GetValue<float>();
                 Plugin.Log.LogInfo($"Player aircraft acquired. Stock RCS = {original:F4}, " +
                                    $"clamping to {Plugin.RcsFloor.Value}");
+                ShowToast();
             }
 
             if (accessor == null) return;
