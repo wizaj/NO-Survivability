@@ -52,12 +52,13 @@ location. Copy the resulting DLL into `BepInEx/plugins/`.
 
 ## Status
 
-**v0.4.0** — in testing. Field testing of earlier versions showed damage
-leaking through paths beyond `TakeDamage`; v0.4.0 blocks the full damage
-surface: direct/RPC damage, blast shockwaves, physics structural tearing,
-and engine debris self-damage. RCS clamp, rebindable toggle, and on-screen
-indicator are confirmed working in singleplayer (game build `211b5aad0ca1`).
-See [CLAUDE.md](CLAUDE.md) for the verified game API reference.
+**v0.4.0 — tested and working in singleplayer** (game build `211b5aad0ca1`).
+Field testing of earlier versions showed damage leaking through paths beyond
+`TakeDamage`; v0.4.0 blocks the full damage surface — direct/RPC damage,
+blast shockwaves, physics structural tearing, and engine debris self-damage —
+and survives sustained missile fire. RCS clamp, rebindable toggle, and
+on-screen indicator all confirmed in-flight. See [CLAUDE.md](CLAUDE.md) for
+the verified game API reference.
 
 ## Credits
 

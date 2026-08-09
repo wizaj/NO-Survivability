@@ -11,7 +11,8 @@ full `IDamageable` damage surface (`TakeDamage`, `ApplyDamage`,
 `TakeShockwave`) plus the two paths that bypass it: `AeroPart.CheckAttachment`
 (physics structural tearing) and `Turbofan.InvokeDamage` (engine
 self-damage). Owner resolution now uses `IDamageable.GetUnit()` instead of
-reflective field guessing. Built and installed, not yet tested.
+reflective field guessing. **Tested and working in singleplayer**
+(2026-08-09): survived sustained missile fire with no structural tearing.
 
 `v0.3.0` — rebindable toggle key (`ConfigEntry<KeyCode>`, hooked into
 `PilotPlayerState.PlayerControls` the way DefensiveAutoTarget does, with
