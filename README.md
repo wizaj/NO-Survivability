@@ -38,6 +38,19 @@ Written to `BepInEx/config/local.nosolosurvivability.cfg` on first run.
 | Keybinds | `Toggle` | `F10` | Any [`KeyCode`](https://docs.unity3d.com/ScriptReference/KeyCode.html) name; `None` disables. Rebind in the cfg or via ConfigurationManager |
 | UI | `ToastSeconds` | `2.5` | On-screen ENABLED/DISABLED indicator duration; `0` hides it |
 
+## Also in this repo: AltitudeInFeet
+
+A second, independent plugin for mixed units of measure: keep the game on
+**Metric** (km distances) but display **altitude in feet** — and climb rate
+in feet per minute — the way the Imperial setting renders them. Both
+conversions are individually toggleable in
+`BepInEx/config/local.altitudeinfeet.cfg`. Does nothing when the game is
+already set to Imperial.
+
+```
+dotnet build src/AltitudeInFeet/AltitudeInFeet.csproj -c Release
+```
+
 ## Building
 
 Requires the game's managed assemblies from your own install; they are not

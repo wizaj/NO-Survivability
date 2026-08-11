@@ -184,6 +184,21 @@ Also useful: `aircraft.GetAircraftParameters().aircraftName`,
 `aircraft.definition.unitName`, `aircraft.definition.jsonKey`,
 `aircraft.radar.activated`, `aircraft.NetworkHQ`, `aircraft.rb`.
 
+### Unit display (AltitudeInFeet plugin)
+
+All measurement strings funnel through static methods on `UnitConverter`
+(global namespace): `AltitudeReading`, `DistanceReading`, `SpeedReading`,
+`SpeedReadingGround`, `ClimbRateReading`, `DimensionReading`,
+`WeightReading`, `YieldReading`, `PowerReading`, plus `TimeOfDay`. Each
+branches on `PlayerSettings.unitSystem` (public static field; nested public
+enum `PlayerSettings.UnitSystem { Metric = 0, Imperial = 1 }`).
+
+Imperial branches, from IL: altitude `{m × 3.28084:F0}ft`; climb rate
+`{sign}{m/s × 60 × 3.28084:F0}fpm` with `+` prefix when > 0.5 m/s. Metric
+altitude uses `F1` below 10 m, `F0` above. `src/AltitudeInFeet` prefixes
+`AltitudeReading`/`ClimbRateReading` to force the Imperial branch while the
+game setting stays Metric — a display-only mod, no gameplay effect.
+
 ## Known unknowns
 
 1. ~~`PersistentID` namespace.~~ **Resolved:** it lives in the global
